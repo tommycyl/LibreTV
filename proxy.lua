@@ -32,6 +32,22 @@ if not target_url or target_url == "" then
     return ngx.exit(400)
 end
 
+-- 豆瓣图片/CDN 需要 Referer，否则返回 418
+local referer = target_url
+if string.find(target_url, "douban%.com") or string.find(target_url, "doubanio%.com") then
+    referer = "https://movie.douban.com/"
+else
+    local origin = string.match(target_url, "(https?://[^/]+)")
+    if origin then
+        referer = origin .. "/"
+    end
+end
+
+ngx.req.set_header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
+ngx.req.set_header("Referer", referer)
+ngx.req.set_header("Accept", "*/*")
+ngx.req.set_header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+
 -- 记录日志
 ngx.log(ngx.STDERR, "代理请求: ", target_url)
 

@@ -92,6 +92,27 @@ app.get('/s=:keyword', async (req, res) => {
   }
 });
 
+function getProxyHeaders(targetUrl) {
+  const headers = {
+    'User-Agent': config.userAgent,
+    'Accept': '*/*',
+    'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+  };
+
+  try {
+    const parsed = new URL(targetUrl);
+    if (parsed.hostname.includes('douban.com') || parsed.hostname.includes('doubanio.com')) {
+      headers.Referer = 'https://movie.douban.com/';
+    } else {
+      headers.Referer = `${parsed.origin}/`;
+    }
+  } catch {
+    // 保持默认请求头
+  }
+
+  return headers;
+}
+
 function isValidUrl(urlString) {
   try {
     const parsed = new URL(urlString);
@@ -140,9 +161,7 @@ app.get('/proxy/:encodedUrl', async (req, res) => {
           url: targetUrl,
           responseType: 'stream',
           timeout: config.timeout,
-          headers: {
-            'User-Agent': config.userAgent
-          }
+          headers: getProxyHeaders(targetUrl)
         });
       } catch (error) {
         if (retries < maxRetries) {
