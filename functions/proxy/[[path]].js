@@ -172,21 +172,30 @@ export async function onRequest(context) {
         return `/proxy/${encodeURIComponent(targetUrl)}`;
     }
 
+    // 根据目标 URL 生成合适的 Referer（豆瓣图片无 Referer 会返回 418）
+    function getRefererForUrl(targetUrl) {
+        try {
+            const parsed = new URL(targetUrl);
+            if (parsed.hostname.includes('douban.com') || parsed.hostname.includes('doubanio.com')) {
+                return 'https://movie.douban.com/';
+            }
+            return `${parsed.origin}/`;
+        } catch {
+            return request.headers.get('Referer') || '';
+        }
+    }
+
     // 获取远程内容及其类型
     async function fetchContentWithType(targetUrl) {
         const headers = new Headers({
             'User-Agent': getRandomUserAgent(),
             'Accept': '*/*',
-            // 尝试传递一些原始请求的头信息
             'Accept-Language': request.headers.get('Accept-Language') || 'zh-CN,zh;q=0.9,en;q=0.8',
-            // 尝试设置 Referer 为目标网站的域名，或者传递原始 Referer
-            'Referer': request.headers.get('Referer') || new URL(targetUrl).origin
+            'Referer': getRefererForUrl(targetUrl),
         });
 
         try {
-            // 直接请求目标 URL
             logDebug(`开始直接请求: ${targetUrl}`);
-            // Cloudflare Functions 的 fetch 默认支持重定向
             const response = await fetch(targetUrl, { headers, redirect: 'follow' });
 
             if (!response.ok) {
@@ -195,15 +204,21 @@ export async function onRequest(context) {
                  throw new Error(`HTTP error ${response.status}: ${response.statusText}. URL: ${targetUrl}. Body: ${errorBody.substring(0, 150)}`);
             }
 
-            // 读取响应内容为文本
-            const content = await response.text();
             const contentType = response.headers.get('Content-Type') || '';
+            const isBinary = isMediaFile(targetUrl, contentType);
+
+            if (isBinary) {
+                const content = await response.arrayBuffer();
+                logDebug(`请求成功(二进制): ${targetUrl}, Content-Type: ${contentType}, 字节长度: ${content.byteLength}`);
+                return { content, contentType, responseHeaders: response.headers, isBinary: true };
+            }
+
+            const content = await response.text();
             logDebug(`请求成功: ${targetUrl}, Content-Type: ${contentType}, 内容长度: ${content.length}`);
-            return { content, contentType, responseHeaders: response.headers }; // 同时返回原始响应头
+            return { content, contentType, responseHeaders: response.headers, isBinary: false };
 
         } catch (error) {
              logDebug(`请求彻底失败: ${targetUrl}: ${error.message}`);
-            // 抛出更详细的错误
             throw new Error(`请求目标URL失败 ${targetUrl}: ${error.message}`);
         }
     }
@@ -425,8 +440,10 @@ export async function onRequest(context) {
 
         logDebug(`收到代理请求: ${targetUrl}`);
 
-        // --- 缓存检查 (KV) ---
-        const cacheKey = `proxy_raw:${targetUrl}`; // 使用原始内容的缓存键
+        const isLikelyBinary = isMediaFile(targetUrl, '');
+
+        // --- 缓存检查 (KV) - 二进制内容不走文本缓存，避免损坏图片 ---
+        const cacheKey = `proxy_raw:${targetUrl}`;
         let kvNamespace = null;
         try {
             kvNamespace = env.LIBRETV_PROXY_KV;
@@ -436,7 +453,7 @@ export async function onRequest(context) {
             kvNamespace = null;
         }
 
-        if (kvNamespace) {
+        if (kvNamespace && !isLikelyBinary) {
             try {
                 const cachedDataJson = await kvNamespace.get(cacheKey); // 直接获取字符串
                 if (cachedDataJson) {
@@ -465,10 +482,10 @@ export async function onRequest(context) {
         }
 
         // --- 实际请求 ---
-        const { content, contentType, responseHeaders } = await fetchContentWithType(targetUrl);
+        const { content, contentType, responseHeaders, isBinary } = await fetchContentWithType(targetUrl);
 
-        // --- 写入缓存 (KV) ---
-        if (kvNamespace) {
+        // --- 写入缓存 (KV) - 仅缓存文本类内容 ---
+        if (kvNamespace && !isBinary) {
              try {
                  const headersToCache = {};
                  responseHeaders.forEach((value, key) => { headersToCache[key.toLowerCase()] = value; });
@@ -483,15 +500,14 @@ export async function onRequest(context) {
         }
 
         // --- 处理响应 ---
-        if (isM3u8Content(content, contentType)) {
+        if (!isBinary && isM3u8Content(content, contentType)) {
             logDebug(`内容是 M3U8，开始处理: ${targetUrl}`);
             const processedM3u8 = await processM3u8Content(targetUrl, content, 0, env);
             return createM3u8Response(processedM3u8);
         } else {
-            logDebug(`内容不是 M3U8 (类型: ${contentType})，直接返回: ${targetUrl}`);
+            logDebug(`内容${isBinary ? '(二进制)' : ''}直接返回: ${targetUrl}, 类型: ${contentType}`);
             const finalHeaders = new Headers(responseHeaders);
             finalHeaders.set('Cache-Control', `public, max-age=${CACHE_TTL}`);
-            // 添加 CORS 头，确保非 M3U8 内容也能跨域访问（例如图片、字幕文件等）
             finalHeaders.set("Access-Control-Allow-Origin", "*");
             finalHeaders.set("Access-Control-Allow-Methods", "GET, HEAD, POST, OPTIONS");
             finalHeaders.set("Access-Control-Allow-Headers", "*");

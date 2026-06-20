@@ -494,8 +494,8 @@ async function fetchDoubanData(url) {
     }
 }
 
-// 规范化豆瓣封面 URL，并通过代理加载（豆瓣图片需要 Referer，直连会被 418 拦截）
-function getDoubanCoverProxyUrl(cover) {
+// 规范化豆瓣封面 URL
+function normalizeDoubanCoverUrl(cover) {
     if (!cover) return '';
     let url = cover.trim();
     if (url.startsWith('//')) {
@@ -503,7 +503,13 @@ function getDoubanCoverProxyUrl(cover) {
     } else if (url.startsWith('http://')) {
         url = `https://${url.slice(7)}`;
     }
-    return PROXY_URL + encodeURIComponent(url);
+    return url;
+}
+
+// 通过代理加载豆瓣封面（豆瓣图片需要 Referer，直连无 Referer 会被 418 拦截）
+function getDoubanCoverProxyUrl(cover) {
+    const url = normalizeDoubanCoverUrl(cover);
+    return url ? PROXY_URL + encodeURIComponent(url) : '';
 }
 
 // 抽取渲染豆瓣卡片的逻辑到单独函数
@@ -535,6 +541,7 @@ function renderDoubanCards(data, container) {
                 .replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;');
             
+            const coverUrl = normalizeDoubanCoverUrl(item.cover);
             const proxiedCoverUrl = getDoubanCoverProxyUrl(item.cover);
             
             // 为不同设备优化卡片布局
@@ -542,7 +549,7 @@ function renderDoubanCards(data, container) {
                 <div class="relative w-full aspect-[2/3] overflow-hidden cursor-pointer" onclick="fillAndSearchWithDouban('${safeTitle}')">
                     <img src="${proxiedCoverUrl}" alt="${safeTitle}" 
                         class="w-full h-full object-cover transition-transform duration-500 hover:scale-110"
-                        onerror="this.onerror=null; this.src='https://via.placeholder.com/300x450?text=暂无封面'; this.classList.add('object-contain');"
+                        onerror="this.onerror=null;if(this.dataset.fb!=='1'){this.dataset.fb='1';this.src='${coverUrl}';}else{this.src='https://via.placeholder.com/300x450?text=%E6%9A%82%E6%97%A0%E5%B0%81%E9%9D%A2';this.classList.add('object-contain');}"
                         loading="lazy">
                     <div class="absolute inset-0 bg-gradient-to-t from-black to-transparent opacity-60"></div>
                     <div class="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded-sm">
