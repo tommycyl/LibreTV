@@ -75,9 +75,9 @@ const API_SITES = {
         api: 'https://huyazy.net/api.php/provide/vod/from/hym3u8/',
         name: '虎牙资源站',
     },
-    xinjipin: {
-        api: 'https://jipinvip1.com/api.php/provide/vod/',
-        name: '新极品资源站',
+    suoni: {
+        api: 'https://suonizy.net/api.php/provide/vod/',
+        name: '索尼',
     },
     // 下面是一些成人内容的API源，默认隐藏，使用本项目浏览黄色内容违背项目初衷
     // 互联网上传播的色情内容将人彻底客体化、工具化，是性别解放和人类平等道路上的巨大障碍。
