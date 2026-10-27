@@ -21,102 +21,59 @@ const SITE_CONFIG = {
 
 // API站点配置
 const API_SITES = {
-    dyttzy: {
-        api: 'http://caiji.dyttzyapi.com/api.php/provide/vod',
-        name: '电影天堂资源',
-        detail: 'http://caiji.dyttzyapi.com',
-    },
     ruyi: {
         api: 'https://cj.rycjapi.com/api.php/provide/vod',
         name: '如意资源',
     },
+    // 332 ms
+    guangsu: {
+        api: 'https://api.guangsuapi.com/api.php/provide/vod/from/gsm3u8/',
+        name: '光速资源站',
+    },
+    // 405 ms
+    jinying: {
+        api: 'https://jyzyapi.com/provide/vod/from/jinyingm3u8/',
+        name: '金鹰资源站',
+    },
+    // 405 ms
     bfzy: {
-        api: 'https://bfzyapi.com/api.php/provide/vod',
-        name: '暴风资源',
+        api: 'https://bfzyapi.com/api.php/provide/vod/',
+        name: '暴风资源站',
     },
-    tyyszy: {
-        api: 'https://tyyszy.com/api.php/provide/vod',
-        name: '天涯资源',
-    },
-    // xiaomaomi: {
-    //     api: 'https://zy.xiaomaomi.cc/api.php/provide/vod',
-    //     name: '小猫咪资源',
-    // },
-    ffzy: {
-        api: 'http://ffzy5.tv/api.php/provide/vod',
-        name: '非凡影视',
-        detail: 'http://ffzy5.tv',
-    },
-    heimuer: {
-        api: 'https://json.heimuer.xyz/api.php/provide/vod',
-        name: '黑木耳',
-        detail: 'https://heimuer.tv',
-    },
-    zy360: {
-        api: 'https://360zy.com/api.php/provide/vod',
-        name: '360资源',
-    },
-    iqiyi: {
-        api: 'https://www.iqiyizyapi.com/api.php/provide/vod',
-        name: 'iqiyi资源',
-    },
-    wolong: {
-        api: 'https://wolongzyw.com/api.php/provide/vod',
-        name: '卧龙资源',
-    },
-    hwba: {
-        api: 'https://cjhwba.com/api.php/provide/vod',
-        name: '华为吧资源',
-    },
+    // 438 ms
     jisu: {
-        api: 'https://jszyapi.com/api.php/provide/vod',
-        name: '极速资源',
-        detail: 'https://jszyapi.com',
+        api: 'https://jszyapi.com/api.php/provide/vod/from/jsm3u8/',
+        name: '极速资源站',
     },
-    dbzy: {
-        api: 'https://dbzy.com/api.php/provide/vod',
-        name: '豆瓣资源',
+    // 447 ms
+    subo: {
+        api: 'https://subocj.com/api.php/provide/vod/from/subm3u8/',
+        name: '速播资源站',
     },
-    mozhua: {
-        api: 'https://mozhuazy.com/api.php/provide/vod',
-        name: '魔爪资源',
+    // 498 ms
+    hongniu: {
+        api: 'http://hongniuzy2.com/api.php/provide/vod/from/hnm3u8/',
+        name: '红牛资源站',
     },
-    mdzy: {
-        api: 'https://www.mdzyapi.com/api.php/provide/vod',
-        name: '魔都资源',
+    // 602 ms
+    haohua: {
+        api: 'https://haohuazy.com/api.php/provide/vod/from/hhm3u8/',
+        name: '豪华资源站',
     },
+    // 623 ms
     zuid: {
-        api: 'https://api.zuidapi.com/api.php/provide/vod',
-        name: '最大资源'
+        api: 'http://zuidazy.me/api.php/provide/vod/',
+        name: '最大资源站',
     },
-    yinghua: {
-        api: 'https://m3u8.apiyhzy.com/api.php/provide/vod',
-        name: '樱花资源'
-    },
-    baidu: {
-        api: 'https://api.apibdzy.com/api.php/provide/vod',
-        name: '百度云资源'
-    },
-    wujin: {
-        api: 'https://api.wujinapi.me/api.php/provide/vod',
-        name: '无尽资源'
-    },
-    wwzy: {
-        api: 'https://wwzy.tv/api.php/provide/vod',
-        name: '旺旺短剧'
-    },
+    // 648 ms
     ikun: {
-        api: 'https://ikunzyapi.com/api.php/provide/vod',
-        name: 'iKun资源'
+        api: 'https://ikunzyapi.com/api.php/provide/vod/',
+        name: '爱坤资源站',
     },
-    pipiquan: {
-        api: 'https://pipiquan.cc/api.php/provide/vod',
-        name: '皮皮圈资源'
-    },
-    testSource: {
-        api: 'https://www.example.com/api.php/provide/vod',
-        name: '空内容测试源',
-        adult: true
+    // 733 ms
+    huya: {
+        api: 'https://huyazy.net/api.php/provide/vod/from/hym3u8/',
+        name: '虎牙资源站',
     },
     // 下面是一些成人内容的API源，默认隐藏，使用本项目浏览黄色内容违背项目初衷
     // 互联网上传播的色情内容将人彻底客体化、工具化，是性别解放和人类平等道路上的巨大障碍。
