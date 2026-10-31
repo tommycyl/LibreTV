@@ -606,6 +606,9 @@ async function search() {
         showToast('请至少选择一个API源', 'warning');
         return;
     }
+
+    // 所有搜索入口共用此函数，每次有效提交只上报一次，不等待埋点结果。
+    window.LibreTVAnalytics?.track('search', query);
     
     showLoading();
     
