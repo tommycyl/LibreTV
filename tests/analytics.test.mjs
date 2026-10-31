@@ -6,13 +6,13 @@ import { readFileSync } from 'node:fs';
 const analyticsSource = readFileSync(new URL('../js/analytics.js', import.meta.url), 'utf8');
 const appSource = readFileSync(new URL('../js/app.js', import.meta.url), 'utf8');
 
-function createPage({ endpoint = '/api/analytics/events', enabled = true, fetchImpl, query = ' 流浪地球 ', sources = ['one', 'two'] } = {}) {
+function createPage({ baseUrl = 'http://206.187.208.65:8080', endpoints = { home_visit: '/api/libre', search: '/api/searchlist' }, enabled = true, fetchImpl, query = ' 流浪地球 ', sources = ['one', 'two'] } = {}) {
     const calls = [];
     const listeners = new Map();
     const timers = new Map();
     let nextTimer = 0;
     const context = vm.createContext({
-        ANALYTICS_CONFIG: { endpoint, enabled, timeoutMs: 3000 },
+        ANALYTICS_CONFIG: { baseUrl, endpoints, enabled, timeoutMs: 3000 },
         window: {
             location: { pathname: '/', search: '?private=not-sent', hash: '#not-sent' },
             navigator: { userAgent: 'Test Browser', platform: 'Win32', language: 'zh-CN' },
@@ -59,7 +59,7 @@ function createPage({ endpoint = '/api/analytics/events', enabled = true, fetchI
 }
 
 test('未配置接口或关闭埋点时不发送访问、搜索数据', async () => {
-    for (const options of [{ endpoint: '' }, { endpoint: '   ' }, { enabled: false }]) {
+    for (const options of [{ endpoints: {} }, { endpoints: { home_visit: ' ', search: ' ' } }, { enabled: false }]) {
         const page = createPage(options);
         page.fireReady();
         await page.context.window.LibreTVAnalytics.track('search', '流浪地球');
@@ -74,7 +74,7 @@ test('首页每次加载一次，发送 JSON 且不附带 Cookie、查询串或 
     page.fireReady();
     assert.equal(page.calls.length, 1);
     const { url, options } = page.calls[0];
-    assert.equal(url, '/api/analytics/events');
+    assert.equal(url, 'http://206.187.208.65:8080/api/libre');
     assert.equal(options.method, 'POST');
     assert.equal(options.headers['Content-Type'], 'application/json');
     assert.equal(options.credentials, 'omit');
@@ -116,7 +116,9 @@ test('搜索去除首尾空白，空搜索不发送；请求失败不抛出、�
     const page = createPage({ fetchImpl: () => Promise.reject(new Error('offline')) });
     await page.context.window.LibreTVAnalytics.track('search', '  流浪地球  ');
     await page.context.window.LibreTVAnalytics.track('search', '   ');
+    await new Promise(setImmediate);
     assert.equal(page.calls.length, 1);
+    assert.equal(page.calls[0].url, 'http://206.187.208.65:8080/api/searchlist');
     assert.equal(JSON.parse(page.calls[0].options.body).keyword, '流浪地球');
     assert.equal(page.timers.size, 0);
 });
@@ -125,11 +127,12 @@ test('达到超时时间会终止请求并清理计时器', async () => {
     const page = createPage({ fetchImpl: (_, { signal }) => new Promise((_, reject) => {
         signal.addEventListener('abort', () => reject(new Error('aborted')));
     }) });
-    const pending = page.context.window.LibreTVAnalytics.track('search', '流浪地球');
+    const result = page.context.window.LibreTVAnalytics.track('search', '流浪地球');
+    assert.equal(result, undefined);
     const timer = [...page.timers.values()][0];
     assert.equal(timer.delay, 3000);
     timer.callback();
-    await pending;
+    await new Promise(setImmediate);
     assert.equal(page.calls[0].options.signal.aborted, true);
     assert.equal(page.timers.size, 0);
 });
@@ -145,6 +148,27 @@ test('实际搜索入口只上报一次，并在埋点仍未返回时继续执�
     assert.equal(body.event, 'search');
     assert.equal(body.keyword, '流浪地球');
     assert.equal('device' in body, false);
+});
+
+test('两个接口立即返回、不读取响应内容，兼容同源及独立接口地址', async () => {
+    const page = createPage({ fetchImpl: () => new Promise(() => {}) });
+    assert.equal(page.context.window.LibreTVAnalytics.track('home_visit'), undefined);
+    assert.equal(page.context.window.LibreTVAnalytics.track('search', '流浪地球'), undefined);
+    assert.deepEqual(page.calls.map(call => call.url), [
+        'http://206.187.208.65:8080/api/libre',
+        'http://206.187.208.65:8080/api/searchlist',
+    ]);
+    const relative = createPage({ baseUrl: '' });
+    relative.context.window.LibreTVAnalytics.track('home_visit');
+    assert.equal(relative.calls[0].url, '/api/libre');
+    const absolute = createPage({ endpoints: { search: 'https://api.example.com/search' } });
+    absolute.context.window.LibreTVAnalytics.track('search', '流浪地球');
+    assert.equal(absolute.calls[0].url, 'https://api.example.com/search');
+    const unreadResponse = new Proxy({}, { get() { throw new Error('response must not be read'); } });
+    const completed = createPage({ fetchImpl: () => Promise.resolve(unreadResponse) });
+    completed.context.window.LibreTVAnalytics.track('home_visit');
+    await new Promise(setImmediate);
+    assert.equal(completed.timers.size, 0);
 });
 
 test('空关键词、无选中源或未通过密码验证时不记录搜索', async () => {

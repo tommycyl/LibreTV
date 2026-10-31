@@ -4,10 +4,14 @@ const PROXY_URL = '/proxy/';    // 适用于 Cloudflare, Netlify (带重写), Ve
 const SEARCH_HISTORY_KEY = 'videoSearchHistory';
 const MAX_HISTORY_ITEMS = 5;
 
-// 访问与搜索埋点：填写接收接口后启用。访客 IP 由接收后端从请求中获取。
+// 访问与搜索埋点。访客 IP 由接收后端从请求中获取。
 const ANALYTICS_CONFIG = {
     enabled: true,
-    endpoint: '', // 例如 /api/analytics/events 或 https://你的后端域名/api/analytics/events
+    baseUrl: 'https://record.tommy.xx.kg', // 前端直接请求，跨域由接收后端处理
+    endpoints: {
+        home_visit: '/api/libre',
+        search: '/api/searchlist',
+    },
     timeoutMs: 3000,
 };
 

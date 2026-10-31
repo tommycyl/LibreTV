@@ -2,13 +2,20 @@
 
 ## 前端配置
 
-在 `js/config.js` 的 `ANALYTICS_CONFIG.endpoint` 填写接收接口，支持同源相对路径和跨域 HTTPS 地址。留空或将 `enabled` 设为 `false` 时不发送请求。当前尚未配置真实接口。
+当前后端基地址为 `http://206.187.208.65:8080`，配置位于 `js/config.js` 的 `ANALYTICS_CONFIG.baseUrl`。事件路径分别配置在 `endpoints.home_visit` 和 `endpoints.search`。单个路径留空时停用该事件，`enabled: false` 停用全部事件。
 
-建议接口：`POST /api/analytics/events`，请求头 `Content-Type: application/json`。
+| 事件 | 接口 | 方法 |
+| --- | --- | --- |
+| 首页访问 | `http://206.187.208.65:8080/api/libre` | POST |
+| 搜索提交 | `http://206.187.208.65:8080/api/searchlist` | POST |
+
+两个接口均发送 `Content-Type: application/json`。`track()` 发出请求后立即返回 `undefined`，不等待、不读取后端的状态或响应体，不影响页面和搜索。
+
+前端直接请求上表中的两个接口，跨域由接收后端处理，不增加 Cloudflare Pages 转发。也支持直接在某个 `endpoints` 字段填写完整 HTTP(S) 地址。
 
 ## 请求 JSON
 
-首页加载（每次页面加载一次，刷新会重新计数）：
+首页加载，发送到 `/api/libre`（每次页面加载一次，刷新会重新计数）：
 
 ```json
 {
@@ -27,7 +34,7 @@
 }
 ```
 
-提交有效搜索（关键词已去除首尾空白）：
+提交有效搜索，发送到 `/api/searchlist`（关键词已去除首尾空白）：
 
 ```json
 {
@@ -81,7 +88,7 @@
 
 ## 响应与跨域
 
-建议成功返回 HTTP `204 No Content`；也可以返回 2xx JSON，例如 `{"code": 0}`。前端不依赖响应体。
+后端可返回 HTTP `204 No Content` 或其他响应。前端不读取响应状态或内容，后台只处理网络失败及清理计时器。
 
 跨域接口需处理 OPTIONS 预检，并对站点实际 Origin 返回：
 
@@ -91,5 +98,7 @@ Access-Control-Allow-Methods: POST, OPTIONS
 Access-Control-Allow-Headers: Content-Type
 Vary: Origin
 ```
+
+Cloudflare Pages 页面使用 HTTPS 时，浏览器会阻止直连当前 HTTP 后端的请求；后端需提供 HTTPS 地址，届时在 `baseUrl` 中替换即可。CORS 响应头不影响混合内容限制。
 
 请求不附带 Cookie 或 Authorization。若后端需要鉴权，提供接口时再约定。前端使用 `keepalive` 尽量完成页面跳转时的发送，默认 3 秒超时；失败不会影响搜索，不自动重试、不补发未配置接口时的历史事件。此统计是尽力上报，不保证每次访问都送达，也不代表按 IP 去重后的独立访客数。

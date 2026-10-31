@@ -27,12 +27,18 @@
         };
     }
 
-    async function track(event, keyword = null) {
+    function track(event, keyword = null) {
         let timeoutId;
         try {
             const config = typeof ANALYTICS_CONFIG === 'undefined' ? null : ANALYTICS_CONFIG;
-            if (!config || !config.enabled || !config.endpoint.trim()) return;
+            if (!config || !config.enabled) return;
             if (event !== 'home_visit' && event !== 'search') return;
+            const endpoint = config.endpoints?.[event]?.trim();
+            if (!endpoint) return;
+            const baseUrl = (config.baseUrl || '').trim().replace(/\/+$/, '');
+            const url = /^https?:\/\//i.test(endpoint) || !baseUrl
+                ? endpoint
+                : `${baseUrl}/${endpoint.replace(/^\/+/, '')}`;
 
             const searchKeyword = event === 'search' ? String(keyword || '').trim() : null;
             if (event === 'search' && !searchKeyword) return;
@@ -47,17 +53,17 @@
 
             const controller = new AbortController();
             timeoutId = setTimeout(() => controller.abort(), config.timeoutMs || 3000);
-            await fetch(config.endpoint.trim(), {
+            // 发出后立即返回；不读取响应状态或响应体，后台仅处理失败和释放计时器。
+            void fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'omit',
                 keepalive: true,
                 signal: controller.signal,
                 body: JSON.stringify(payload),
-            });
+            }).catch(() => {}).finally(() => clearTimeout(timeoutId));
         } catch {
-            // 网络错误、接口异常和超时均不打断业务，也不重试以免重复统计。
-        } finally {
+            // 同步异常也不打断业务；不自动重试，避免重复统计。
             if (timeoutId !== undefined) clearTimeout(timeoutId);
         }
     }
