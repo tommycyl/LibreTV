@@ -548,9 +548,17 @@ async function handleMultipleCustomSearch(searchQuery, customApiUrls) {
     const originalFetch = window.fetch;
     
     window.fetch = async function(input, init) {
-        const requestUrl = typeof input === 'string' ? new URL(input, window.location.origin) : input.url;
-        
-        if (requestUrl.pathname.startsWith('/api/')) {
+        const requestUrl = new URL(
+            typeof input === 'string' || input instanceof URL ? input : input.url,
+            window.location.origin
+        );
+        const method = (init?.method || input?.method || 'GET').toUpperCase();
+        // 仅在前端模拟本站的视频查询接口，其他 API（包括外部埋点）正常联网。
+        const isLocalVideoApi = requestUrl.origin === window.location.origin
+            && method === 'GET'
+            && (requestUrl.pathname === '/api/search' || requestUrl.pathname === '/api/detail');
+
+        if (isLocalVideoApi) {
             if (window.isPasswordProtected && window.isPasswordVerified) {
                 if (window.isPasswordProtected() && !window.isPasswordVerified()) {
                     return;

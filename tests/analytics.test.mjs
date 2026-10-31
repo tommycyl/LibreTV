@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 
 const analyticsSource = readFileSync(new URL('../js/analytics.js', import.meta.url), 'utf8');
 const appSource = readFileSync(new URL('../js/app.js', import.meta.url), 'utf8');
+const apiSource = readFileSync(new URL('../js/api.js', import.meta.url), 'utf8');
 const configSource = readFileSync(new URL('../js/config.js', import.meta.url), 'utf8');
 const deployedConfig = vm.runInNewContext(`${configSource}\nANALYTICS_CONFIG;`);
 
@@ -21,7 +22,7 @@ function createPage({ baseUrl = deployedConfig.baseUrl, endpoints = deployedConf
             warn: (...args) => logs.push(args),
         },
         window: {
-            location: { pathname: '/', search: '?private=not-sent', hash: '#not-sent' },
+            location: { origin: 'https://tv.tommy.xx.kg', pathname: '/', search: '?private=not-sent', hash: '#not-sent' },
             navigator: { userAgent: 'Test Browser', platform: 'Win32', language: 'zh-CN' },
             screen: { width: 1920, height: 1080 },
             devicePixelRatio: 1.5,
@@ -43,6 +44,9 @@ function createPage({ baseUrl = deployedConfig.baseUrl, endpoints = deployedConf
             return fetchImpl ? fetchImpl(url, options) : Promise.resolve({ ok: true });
         },
         AbortController,
+        URL,
+        Request,
+        Response,
         setTimeout(callback, delay) {
             const id = ++nextTimer;
             timers.set(id, { callback, delay });
@@ -57,6 +61,16 @@ function createPage({ baseUrl = deployedConfig.baseUrl, endpoints = deployedConf
     return {
         context, calls, timers, logs,
         loadApp: () => vm.runInContext(appSource, context),
+        loadApi() {
+            // 浏览器中全局 fetch 和 window.fetch 是同一个绑定；模拟真实脚本加载顺序。
+            context.window.fetch = context.fetch;
+            Object.defineProperty(context, 'fetch', {
+                configurable: true,
+                get: () => context.window.fetch,
+                set: value => { context.window.fetch = value; },
+            });
+            vm.runInContext(apiSource, context);
+        },
         fireReady() {
             const list = listeners.get('DOMContentLoaded') || [];
             listeners.set('DOMContentLoaded', list.filter(item => !item.once));
@@ -203,4 +217,46 @@ test('空关键词、无选中源或未通过密码验证时不记录搜索', as
         await page.context.search();
         assert.equal(page.calls.length, 0);
     }
+});
+
+test('加载 api.js 的全局拦截器后，首页和搜索埋点仍调用原始联网 fetch', async () => {
+    const page = createPage();
+    page.loadApi();
+    // 访问埋点应在首页加载时发送，即使用户还没通过视频访问密码验证。
+    page.context.window.isPasswordProtected = () => true;
+    page.context.window.isPasswordVerified = () => false;
+    page.fireReady();
+    page.loadApp();
+    page.context.window.isPasswordVerified = () => true;
+    const searchStarted = new Error('search started');
+    page.context.showLoading = () => { throw searchStarted; };
+    await assert.rejects(page.context.search(), error => error === searchStarted);
+    assert.deepEqual(page.calls.map(call => call.url), [
+        'https://record.tommy.xx.kg/api/libre',
+        'https://record.tommy.xx.kg/api/searchlist',
+    ]);
+    assert.deepEqual(page.calls.map(call => JSON.parse(call.options.body).event), ['home_visit', 'search']);
+    await new Promise(setImmediate);
+    assert.equal(page.timers.size, 0);
+});
+
+test('只拦截同源 GET 视频接口，外部 API、其他同源 API 和 POST 均正常联网', async () => {
+    const page = createPage({ fetchImpl: async () => new Response(null, { status: 204 }) });
+    page.loadApi();
+    const local = [];
+    page.context.handleApiRequest = async url => {
+        local.push(url.pathname);
+        return JSON.stringify({ code: 200, list: [] });
+    };
+    const searchResponse = await page.context.fetch('/api/search?wd=test');
+    assert.equal((await searchResponse.json()).code, 200);
+    await page.context.fetch(new Request('https://tv.tommy.xx.kg/api/detail?id=1'));
+    assert.deepEqual(local, ['/api/search', '/api/detail']);
+    assert.equal(page.calls.length, 0);
+    await page.context.fetch('https://record.tommy.xx.kg/api/search?wd=test');
+    await page.context.fetch('/api/libre', { method: 'POST', body: '{}' });
+    await page.context.fetch('/api/search', { method: 'POST', body: '{}' });
+    await page.context.fetch(new URL('https://record.tommy.xx.kg/api/searchlist'));
+    assert.equal(page.calls.length, 4);
+    assert.deepEqual(local, ['/api/search', '/api/detail']);
 });
