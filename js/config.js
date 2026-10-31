@@ -8,6 +8,7 @@ const MAX_HISTORY_ITEMS = 5;
 const ANALYTICS_CONFIG = {
     enabled: true,
     baseUrl: 'https://record.tommy.xx.kg', // 前端直接请求，跨域由接收后端处理
+    debug: true, // 联调时在控制台记录事件和接口地址，不记录关键词、IP 或设备信息
     endpoints: {
         home_visit: '/api/libre',
         search: '/api/searchlist',

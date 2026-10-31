@@ -2,12 +2,12 @@
 
 ## 前端配置
 
-当前后端基地址为 `http://206.187.208.65:8080`，配置位于 `js/config.js` 的 `ANALYTICS_CONFIG.baseUrl`。事件路径分别配置在 `endpoints.home_visit` 和 `endpoints.search`。单个路径留空时停用该事件，`enabled: false` 停用全部事件。
+当前后端基地址为 `https://record.tommy.xx.kg`，配置位于 `js/config.js` 的 `ANALYTICS_CONFIG.baseUrl`。事件路径分别配置在 `endpoints.home_visit` 和 `endpoints.search`。单个路径留空时停用该事件，`enabled: false` 停用全部事件。
 
 | 事件 | 接口 | 方法 |
 | --- | --- | --- |
-| 首页访问 | `http://206.187.208.65:8080/api/libre` | POST |
-| 搜索提交 | `http://206.187.208.65:8080/api/searchlist` | POST |
+| 首页访问 | `https://record.tommy.xx.kg/api/libre` | POST |
+| 搜索提交 | `https://record.tommy.xx.kg/api/searchlist` | POST |
 
 两个接口均发送 `Content-Type: application/json`。`track()` 发出请求后立即返回 `undefined`，不等待、不读取后端的状态或响应体，不影响页面和搜索。
 
@@ -99,6 +99,12 @@ Access-Control-Allow-Headers: Content-Type
 Vary: Origin
 ```
 
-Cloudflare Pages 页面使用 HTTPS 时，浏览器会阻止直连当前 HTTP 后端的请求；后端需提供 HTTPS 地址，届时在 `baseUrl` 中替换即可。CORS 响应头不影响混合内容限制。
+当前后端已使用 HTTPS，可以从 Cloudflare Pages 的 HTTPS 页面直接请求；后端仍需正常返回 CORS 响应头。
+
+## 排查请求
+
+`ANALYTICS_CONFIG.debug: true` 时，在浏览器控制台筛选 `[Analytics]`：`发起请求` 代表调用了 fetch；`请求未完成` 代表网络、跨域或超时导致请求未完成；`无法发起请求` 代表同步异常。日志只包含事件类型、接口地址和异常类型，不包含关键词、IP 或设备信息。日志不代表后端已入库；联调完成可设为 `false`。
+
+先打开开发者工具再刷新首页，在 Network 面板选择 All 或 Fetch/XHR，筛选 `record.tommy.xx.kg`。搜索事件只会在密码验证通过、关键词非空且至少选中一个视频源时触发。修改配置后需重新部署，强制刷新页面以更新缓存脚本。
 
 请求不附带 Cookie 或 Authorization。若后端需要鉴权，提供接口时再约定。前端使用 `keepalive` 尽量完成页面跳转时的发送，默认 3 秒超时；失败不会影响搜索，不自动重试、不补发未配置接口时的历史事件。此统计是尽力上报，不保证每次访问都送达，也不代表按 IP 去重后的独立访客数。

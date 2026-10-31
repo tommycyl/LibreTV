@@ -5,14 +5,21 @@ import { readFileSync } from 'node:fs';
 
 const analyticsSource = readFileSync(new URL('../js/analytics.js', import.meta.url), 'utf8');
 const appSource = readFileSync(new URL('../js/app.js', import.meta.url), 'utf8');
+const configSource = readFileSync(new URL('../js/config.js', import.meta.url), 'utf8');
+const deployedConfig = vm.runInNewContext(`${configSource}\nANALYTICS_CONFIG;`);
 
-function createPage({ baseUrl = 'http://206.187.208.65:8080', endpoints = { home_visit: '/api/libre', search: '/api/searchlist' }, enabled = true, fetchImpl, query = ' 流浪地球 ', sources = ['one', 'two'] } = {}) {
+function createPage({ baseUrl = deployedConfig.baseUrl, endpoints = deployedConfig.endpoints, enabled = true, debug = false, fetchImpl, query = ' 流浪地球 ', sources = ['one', 'two'] } = {}) {
     const calls = [];
     const listeners = new Map();
     const timers = new Map();
+    const logs = [];
     let nextTimer = 0;
     const context = vm.createContext({
-        ANALYTICS_CONFIG: { baseUrl, endpoints, enabled, timeoutMs: 3000 },
+        ANALYTICS_CONFIG: { baseUrl, endpoints, enabled, debug, timeoutMs: 3000 },
+        console: {
+            info: (...args) => logs.push(args),
+            warn: (...args) => logs.push(args),
+        },
         window: {
             location: { pathname: '/', search: '?private=not-sent', hash: '#not-sent' },
             navigator: { userAgent: 'Test Browser', platform: 'Win32', language: 'zh-CN' },
@@ -48,7 +55,7 @@ function createPage({ baseUrl = 'http://206.187.208.65:8080', endpoints = { home
     });
     vm.runInContext(analyticsSource, context);
     return {
-        context, calls, timers,
+        context, calls, timers, logs,
         loadApp: () => vm.runInContext(appSource, context),
         fireReady() {
             const list = listeners.get('DOMContentLoaded') || [];
@@ -74,7 +81,7 @@ test('首页每次加载一次，发送 JSON 且不附带 Cookie、查询串或 
     page.fireReady();
     assert.equal(page.calls.length, 1);
     const { url, options } = page.calls[0];
-    assert.equal(url, 'http://206.187.208.65:8080/api/libre');
+    assert.equal(url, 'https://record.tommy.xx.kg/api/libre');
     assert.equal(options.method, 'POST');
     assert.equal(options.headers['Content-Type'], 'application/json');
     assert.equal(options.credentials, 'omit');
@@ -118,7 +125,7 @@ test('搜索去除首尾空白，空搜索不发送；请求失败不抛出、�
     await page.context.window.LibreTVAnalytics.track('search', '   ');
     await new Promise(setImmediate);
     assert.equal(page.calls.length, 1);
-    assert.equal(page.calls[0].url, 'http://206.187.208.65:8080/api/searchlist');
+    assert.equal(page.calls[0].url, 'https://record.tommy.xx.kg/api/searchlist');
     assert.equal(JSON.parse(page.calls[0].options.body).keyword, '流浪地球');
     assert.equal(page.timers.size, 0);
 });
@@ -155,8 +162,8 @@ test('两个接口立即返回、不读取响应内容，兼容同源及独立�
     assert.equal(page.context.window.LibreTVAnalytics.track('home_visit'), undefined);
     assert.equal(page.context.window.LibreTVAnalytics.track('search', '流浪地球'), undefined);
     assert.deepEqual(page.calls.map(call => call.url), [
-        'http://206.187.208.65:8080/api/libre',
-        'http://206.187.208.65:8080/api/searchlist',
+        'https://record.tommy.xx.kg/api/libre',
+        'https://record.tommy.xx.kg/api/searchlist',
     ]);
     const relative = createPage({ baseUrl: '' });
     relative.context.window.LibreTVAnalytics.track('home_visit');
@@ -169,6 +176,19 @@ test('两个接口立即返回、不读取响应内容，兼容同源及独立�
     completed.context.window.LibreTVAnalytics.track('home_visit');
     await new Promise(setImmediate);
     assert.equal(completed.timers.size, 0);
+});
+
+test('调试日志可区分发起请求与失败，且不输出关键词和设备信息', async () => {
+    const page = createPage({ debug: true, fetchImpl: () => Promise.reject(new TypeError('network')) });
+    page.fireReady();
+    page.context.window.LibreTVAnalytics.track('search', 'private search keyword');
+    await new Promise(setImmediate);
+    assert.equal(page.logs.filter(args => args[0] === '[Analytics] 发起请求').length, 2);
+    assert.equal(page.logs.filter(args => args[0] === '[Analytics] 请求未完成').length, 2);
+    const text = JSON.stringify(page.logs);
+    assert.equal(text.includes('private search keyword'), false);
+    assert.equal(text.includes('Test Browser'), false);
+    assert.equal(page.timers.size, 0);
 });
 
 test('空关键词、无选中源或未通过密码验证时不记录搜索', async () => {
